@@ -1,10 +1,9 @@
 # Makefile for CDMT
 
-GPU_ARCH ?= sm_86
+GPU_ARCH = sm_70
 
 # CUDA links
-CUDALINK := $(shell pkg-config --libs cuda-12.4)
-CUDAINCL := $(shell pkg-config --cflags cuda-12.4)
+CUDAINCL := $(shell pkg-config --cflags cuda-11.4)
 
 # VDIFIO links and libraries
 VDIFIOLINK := $(shell pkg-config --libs vdifio)
@@ -17,7 +16,7 @@ CFLAGS = $(CUDAINCL) $(VDIFIOINCL)
 LFLAGS = -lm $(CUDALINK) -lcufft -lcurand $(VDIFIOLINK)
 
 # Compilers
-NVCC = /usr/local/cuda-12.4/bin/nvcc -arch=$(GPU_ARCH)
+NVCC = ${NVIDIA_CUDA_HOME}/bin/nvcc -arch=$(GPU_ARCH)
 
 # Source files
 CU_SRC = cdmt.cu error_check.cu
