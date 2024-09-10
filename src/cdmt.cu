@@ -14,15 +14,15 @@ int main(int argc,char *argv[])
   struct vdif_file *vf;
 
   // File input
-  char *hdrfname;        // Name of first HDF5 metadata file
-  FILE *file;            // Pointer to first HDF5 metadata file
-  FILE **input_files;    // Pointers to array of raw file names
-  char fheader[1024];    // Filterbank header string
-  int nread,nread_tmp;   // Amount of data read from block in bytes
-  int bytes_read;        // Filterbank header size in bytes
-  char *vfbuf;           // Host buffer for reading VDIF data
-  char *tmp_vfbuf;       // Host buffer for reading VDIF data
-  char *dvfbuf;          // Device buffer for reading VDIF data
+  char *hdrfname;           // Name of first HDF5 metadata file
+  FILE *file;               // Pointer to first HDF5 metadata file
+  FILE **input_files;       // Pointers to array of raw file names
+  char fheader[1024];       // Filterbank header string
+  int nread,nread_tmp;      // Amount of data read from block in bytes
+  int bytes_read;           // Filterbank header size in bytes
+  unsigned char *vfbuf;     // Host buffer for reading VDIF data
+  unsigned char *tmp_vfbuf; // Host buffer for reading VDIF data
+  unsigned char *dvfbuf;    // Device buffer for reading VDIF data
   
   // File output
   char fname[256];         // Name of output filterbanks
@@ -314,9 +314,9 @@ int main(int argc,char *argv[])
   printf("We anticipate %ld MB (%ld GB) to be allocated on the GPU (%ld MB for cuFFT planning).\n", (bytes_used + minfftsize) >> 20, (bytes_used + minfftsize) >> 30, minfftsize >> 20);
 
   // Allocate memory for raw complex timeseries
-  vfbuf=(char *) malloc(sizeof(char)*nsamp*nsub*4);
-  tmp_vfbuf=(char *) malloc(nframe*VDIF_FRAME_BYTES);
-  checkCudaErrors(cudaMalloc((void **) &dvfbuf,sizeof(char)*nsamp*nsub*4));
+  vfbuf=(unsigned char *) malloc(sizeof(unsigned char)*nsamp*nsub*4);
+  tmp_vfbuf=(unsigned char *) malloc(nframe*VDIF_FRAME_BYTES);
+  checkCudaErrors(cudaMalloc((void **) &dvfbuf,sizeof(unsigned char)*nsamp*nsub*4));
 
   // Allocate memory for unpacked complex timeseries
   checkCudaErrors(cudaMalloc((void **) &cp1,sizeof(cufftComplex)*nbin*nfft*nsub));
@@ -427,9 +427,9 @@ int main(int argc,char *argv[])
     blocksize.x=32; blocksize.y=32; blocksize.z=1;
     gridsize.x=nbin/blocksize.x+1; gridsize.y=nfft/blocksize.y+1; gridsize.z=nsub/blocksize.z+1;
     if (iblock>0) {
-      unpack_and_padd<<<gridsize,blocksize>>>(dvfbuf,nread,nbin,nfft,nsub,noverlap,cp1p,cp2p);
+      unpack_and_padd<unsigned char><<<gridsize,blocksize>>>(dvfbuf,nread,nbin,nfft,nsub,noverlap,cp1p,cp2p);
     } else {
-      unpack_and_padd_first_iteration<<<gridsize,blocksize>>>(dvfbuf,nread,nbin,nfft,nsub,noverlap,cp1p,cp2p);
+      unpack_and_padd_first_iteration<unsigned char><<<gridsize,blocksize>>>(dvfbuf,nread,nbin,nfft,nsub,noverlap,cp1p,cp2p);
     }
 
     // Perform FFTs
@@ -455,7 +455,7 @@ int main(int argc,char *argv[])
       if (idm==ndm-1) {
         blocksize.x=32; blocksize.y=32; blocksize.z=1;
         gridsize.x=nbin/blocksize.x+1; gridsize.y=nfft/blocksize.y+1; gridsize.z=nsub/blocksize.z+1;
-        padd_next_iteration<<<gridsize,blocksize>>>(dvfbuf,nread,nbin,nfft,nsub,noverlap,cp1p,cp2p);
+        padd_next_iteration<unsigned char><<<gridsize,blocksize>>>(dvfbuf,nread,nbin,nfft,nsub,noverlap,cp1p,cp2p);
       }
       
       // Swap spectrum halves for small FFTs
@@ -649,7 +649,7 @@ __global__ void compute_chirp(double fcen,double bw,float *dm,int nchan,int nbin
 // Unpack the input buffer and generate complex timeseries. The output
 // timeseries are padded with noverlap samples on either side for the
 // convolution.
-__global__ void unpack_and_padd(char *dbuf,int nsamp,int nbin,int nfft,int nsub,int noverlap,cufftComplex *cp1,cufftComplex *cp2)
+template<typename I> __global__ void unpack_and_padd(I *dbuf,int nsamp,int nbin,int nfft,int nsub,int noverlap,cufftComplex *cp1,cufftComplex *cp2)
 {
   int64_t ibin,ifft,isamp,isub,idx1,idx2;
 
@@ -665,10 +665,10 @@ __global__ void unpack_and_padd(char *dbuf,int nsamp,int nbin,int nfft,int nsub,
       idx1=ibin+nbin*isub+nsub*nbin*ifft;
       idx2=4*nsamp*isub+4*(isamp-noverlap);
 
-      cp1[idx1].x=((float)(uint8_t) dbuf[idx2]  ) - 128.0;
-      cp1[idx1].y=((float)(uint8_t) dbuf[idx2+1]) - 128.0;
-      cp2[idx1].x=((float)(uint8_t) dbuf[idx2+2]) - 128.0;
-      cp2[idx1].y=((float)(uint8_t) dbuf[idx2+3]) - 128.0;
+      cp1[idx1].x=(float) dbuf[idx2  ];
+      cp1[idx1].y=(float) dbuf[idx2+1];
+      cp2[idx1].x=(float) dbuf[idx2+2];
+      cp2[idx1].y=(float) dbuf[idx2+3];
     }
   }
 
@@ -682,7 +682,7 @@ __global__ void unpack_and_padd(char *dbuf,int nsamp,int nbin,int nfft,int nsub,
 // the final non-noverlap region and final noverlap region so that they can 
 // match the first noverlap region and first non-noverlap on the second
 // iteration
-__global__ void unpack_and_padd_first_iteration(char *dbuf,int nsamp,int nbin,int nfft,int nsub,int noverlap,cufftComplex *cp1,cufftComplex *cp2)
+template<typename I> __global__ void unpack_and_padd_first_iteration(I *dbuf,int nsamp,int nbin,int nfft,int nsub,int noverlap,cufftComplex *cp1,cufftComplex *cp2)
 {
   int64_t ibin,ifft,isamp,isub,idx1,idx2;
 
@@ -698,18 +698,18 @@ __global__ void unpack_and_padd_first_iteration(char *dbuf,int nsamp,int nbin,in
       idx1=ibin+nbin*isub+nsub*nbin*ifft;
       idx2=4*nsamp*isub+4*(isamp-noverlap);
 
-      cp1[idx1].x=((float)(uint8_t) dbuf[idx2]  ) - 128.0;
-      cp1[idx1].y=((float)(uint8_t) dbuf[idx2+1]) - 128.0;
-      cp2[idx1].x=((float)(uint8_t) dbuf[idx2+2]) - 128.0;
-      cp2[idx1].y=((float)(uint8_t) dbuf[idx2+3]) - 128.0;
+      cp1[idx1].x=(float) dbuf[idx2  ];
+      cp1[idx1].y=(float) dbuf[idx2+1];
+      cp2[idx1].x=(float) dbuf[idx2+2];
+      cp2[idx1].y=(float) dbuf[idx2+3];
     } else if (isamp > -noverlap) {
       idx1=ibin+nbin*isub+nsub*nbin*ifft;
       idx2=4*nsamp*isub+4*(noverlap-isamp);
 
-      cp1[idx1].x=((float)(uint8_t) dbuf[idx2]  ) - 128.0;
-      cp1[idx1].y=((float)(uint8_t) dbuf[idx2+1]) - 128.0;
-      cp2[idx1].x=((float)(uint8_t) dbuf[idx2+2]) - 128.0;
-      cp2[idx1].y=((float)(uint8_t) dbuf[idx2+3]) - 128.0;
+      cp1[idx1].x=(float) dbuf[idx2  ];
+      cp1[idx1].y=(float) dbuf[idx2+1];
+      cp2[idx1].x=(float) dbuf[idx2+2];
+      cp2[idx1].y=(float) dbuf[idx2+3];
     }
   }
 
@@ -725,7 +725,7 @@ __global__ void unpack_and_padd_first_iteration(char *dbuf,int nsamp,int nbin,in
 // t = 1: nfft_0_N: overlap_0_1, nfft_1_0.... nfft_1_N-1:overlap_1_1
 // t = 2 nfft_1_N-1: overlap_1_1...
 // etc
-__global__ void padd_next_iteration(char *dbuf,int nsamp,int nbin,int nfft,int nsub,int noverlap,cufftComplex *cp1,cufftComplex *cp2)
+template<typename I> __global__ void padd_next_iteration(I *dbuf,int nsamp,int nbin,int nfft,int nsub,int noverlap,cufftComplex *cp1,cufftComplex *cp2)
 {
   int64_t ibin,ifft,isamp,isub,idx1,idx2;
 
@@ -741,10 +741,10 @@ __global__ void padd_next_iteration(char *dbuf,int nsamp,int nbin,int nfft,int n
       idx1=ibin+nbin*isub+nsub*nbin*ifft;
       idx2=4*nsamp*isub+4*(isamp+nsamp-2*noverlap);
 
-      cp1[idx1].x=((float)(uint8_t) dbuf[idx2]  ) - 128.0;
-      cp1[idx1].y=((float)(uint8_t) dbuf[idx2+1]) - 128.0;
-      cp2[idx1].x=((float)(uint8_t) dbuf[idx2+2]) - 128.0;
-      cp2[idx1].y=((float)(uint8_t) dbuf[idx2+3]) - 128.0;
+      cp1[idx1].x=(float) dbuf[idx2  ];
+      cp1[idx1].y=(float) dbuf[idx2+1];
+      cp2[idx1].x=(float) dbuf[idx2+2];
+      cp2[idx1].y=(float) dbuf[idx2+3];
     }
   }
 }

@@ -197,7 +197,7 @@ double get_start_mjd(char *datafn)
     return mjd;
 }
 
-int read_block_and_strip(FILE *file,char *vfbuf,char *tmp_vfbuf,int isub,int nframe)
+int read_block_and_strip(FILE *file,unsigned char *vfbuf,unsigned char *tmp_vfbuf,int isub,int nframe)
 {
     int nread;
     int nsamp_read;

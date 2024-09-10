@@ -25,9 +25,6 @@ static __device__ __host__ inline cufftComplex ComplexMul(cufftComplex a,cufftCo
 static __global__ void PointwiseComplexMultiply(cufftComplex *a,cufftComplex *b,cufftComplex *c,int nx,int ny,int l,float scale);
 
 __global__ void transpose_unpadd_and_detect(cufftComplex *cp1,cufftComplex *cp2,int nbin,int nchan,int nfft,int nsub,int noverlap,int nsamp,float *fbuf);
-__global__ void unpack_and_padd(char *dbuf,int nsamp,int nbin,int nfft,int nsub,int noverlap,cufftComplex *cp1,cufftComplex *cp2);
-__global__ void unpack_and_padd_first_iteration(char *dbuf,int nsamp,int nbin,int nfft,int nsub,int noverlap,cufftComplex *cp1,cufftComplex *cp2);
-__global__ void padd_next_iteration(char *dbuf,int nsamp,int nbin,int nfft,int nsub,int noverlap,cufftComplex *cp1,cufftComplex *cp2);
 __global__ void swap_spectrum_halves(cufftComplex *cp1,cufftComplex *cp2,int nx,int ny);
 __global__ void compute_chirp(double fcen,double bw,float *dm,int nchan,int nbin,int nsub,int ndm,cufftComplex *c);
 __global__ void compute_block_sums(float *z,int nchan,int nblock,int nsum,float *bs1,float *bs2);
@@ -38,5 +35,9 @@ __global__ void decimate_and_redigitize(float *z,int ndec,int nchan,int nblock,i
 #ifdef __cplusplus
 }
 #endif
+
+template<typename I> __global__ void unpack_and_padd(I *dbuf,int nsamp,int nbin,int nfft,int nsub,int noverlap,cufftComplex *cp1,cufftComplex *cp2);
+template<typename I> __global__ void unpack_and_padd_first_iteration(I *dbuf,int nsamp,int nbin,int nfft,int nsub,int noverlap,cufftComplex *cp1,cufftComplex *cp2);
+template<typename I> __global__ void padd_next_iteration(I *dbuf,int nsamp,int nbin,int nfft,int nsub,int noverlap,cufftComplex *cp1,cufftComplex *cp2);
 
 #endif // __CDMT_h

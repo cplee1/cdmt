@@ -43,7 +43,7 @@ int parse_ascii_header(struct vdif_file *vf,unsigned int nsub,char *hdrfn,char *
 int get_lowest_subband(char *hdrfile);
 char *get_common_fname(char *hdrfile);
 double get_start_mjd(char *datafn);
-int read_block_and_strip(FILE *file,char *vfbuf,char *tmp_vfbuf,int isub,int nframe);
+int read_block_and_strip(FILE *file,unsigned char *vfbuf,unsigned char *tmp_vfbuf,int isub,int nframe);
 
 #ifdef __cplusplus
 }
